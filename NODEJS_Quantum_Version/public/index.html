@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BCH Quantum Vault</title>
+
+    <!-- Modern Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="styles.css">
     <!-- QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -11,40 +17,46 @@
 <body>
 
 <div class="container">
-    <h1>BCH Quantum Vault</h1>
-    
+    <h1>QUANTUM VAULT</h1>
+
     <!-- CREATE SECTION -->
     <div class="card">
-        <h2>Create New Vault</h2>
-        <p style="font-size:0.9em; color:#888;">Generates a SHA256 Hash-Locked Address (Quantum Safe).</p>
-        <button onclick="createVault()">Generate Vault</button>
-        
-        <div id="result" style="margin-top: 20px;">
+        <h2><span style="color:#0ac18e">◆</span> Generate Vault</h2>
+        <p style="font-size:0.9em; color:#94a3b8; margin-bottom:20px;">
+            Create a SHA256 Hash-Locked (P2SH) address immune to quantum ECDSA attacks.
+        </p>
+        <button onclick="createVault()">Initialize Quantum Protocol</button>
+
+        <div id="result">
             <!-- Addresses Container -->
             <div id="addressesContainer"></div>
 
-            <div class="field">
-                <label>SECRET (SAVE THIS!):</label>
+            <div class="field" style="margin-top:25px;">
+                <label style="color:#ff6b6b;">MASTER KEY (SECRET)</label>
                 <div class="secret" id="vaultSecret">...</div>
-                <button class="copy-btn" onclick="copySecret()">Copy Secret</button>
+                <button class="copy-btn" onclick="copySecret()">Copy Key</button>
             </div>
         </div>
     </div>
 
     <!-- SPEND SECTION -->
     <div class="card">
-        <h2>Sweep / Recover Vault</h2>
+        <h2><span style="color:#4da6ff">◈</span> Access Vault</h2>
         <div class="field">
-            <label>Vault Secret (Hex):</label>
-            <input type="text" id="sweepSecret" placeholder="Paste your secret here...">
+            <label>Master Key (Hex)</label>
+            <input type="text" id="sweepSecret" placeholder="Enter 64-char secret...">
         </div>
         <div class="field">
-            <label>Recipient Address:</label>
+            <label>Destination Address</label>
             <input type="text" id="recipientAddr" placeholder="bitcoincash:...">
         </div>
-        <button onclick="checkBalance()">Check Balance First</button>
-        <button onclick="sweepVault()" style="background:#444; margin-top:10px;">Sweep Funds</button>
-        <p id="statusMsg" style="text-align:center; margin-top:10px; font-size:0.9em;"></p>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:20px;">
+            <button onclick="checkBalance()" style="background:#2d3748; box-shadow:none; border:1px solid #444; color:#eee;">Check Status</button>
+            <button onclick="sweepVault()">Sweep Funds</button>
+        </div>
+
+        <p id="statusMsg"></p>
     </div>
 </div>
 
