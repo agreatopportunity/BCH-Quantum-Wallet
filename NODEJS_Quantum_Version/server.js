@@ -193,23 +193,59 @@ app.post('/api/balance', async (req, res) => {
 
 app.post('/api/sweep', async (req, res) => {
     const { secret, toAddress } = req.body;
+    
     try {
+        if (!Contract) throw new Error("mainnet-js Contract module not loaded");
+
+        // 1. Re-derive the Vault details
         const secretBuf = Buffer.from(secret, 'hex');
-        const secretHash = crypto.createHash('sha256').update(secretBuf).digest();
-        const scriptBuffer = Buffer.concat([Buffer.from('a820', 'hex'), secretHash, Buffer.from('87', 'hex')]);
+        const secretHash = crypto.createHash('sha256').update(secretBuf).digest('hex');
         
-        const s256 = crypto.createHash('sha256').update(scriptBuffer).digest();
-        const h160 = crypto.createHash('ripemd160').update(s256).digest();
-        const address = toCashAddress(h160, 'p2sh');
+        // 2. Define the Hash Lock Contract (CashScript)
+        // This allows mainnet-js to handle the spending logic for us!
+        const scriptText = `
+            contract QuantumVault(bytes32 hash) {
+                function spend(bytes secret) {
+                    require(sha256(secret) == hash);
+                }
+            }
+        `;
+        
+        // 3. Instantiate the Contract Wallet
+        // We pass the specific hash for this vault as a constructor argument
+        const contract = new Contract(scriptText, [secretHash], 'mainnet');
+        
+        // Verify the address matches what we generated manually
+        console.log(`Sweeping from Contract Address: ${contract.address}`);
+        
+        // 4. Check Balance
+        const balance = await contract.getBalance('sat');
+        console.log(`Vault Balance: ${balance} sats`);
+        
+        if (balance < 2000) { // Minimum reasonable amount to sweep
+            return res.json({ success: false, error: `Insufficient funds (${balance} sats). Send more BCH to test.` });
+        }
+        
+        // 5. Execute the Spend (Broadcasting Real Transaction)
+        // We call the 'spend' function defined in the contract
+        // Arguments: [secretHex]
+        // to: recipient address
+        // amount: balance - fee (sendMax)
+        
+        const tx = await contract.functions.spend(secret)
+            .to(toAddress, balance - 1000) // Deduct ~1000 sats for fee/dust safety
+            .send();
 
         res.json({ 
             success: true, 
-            message: `Vault ${address.slice(0,15)}... Validated!`,
-            txid: "tx_simulated_" + crypto.randomBytes(8).toString('hex'),
-            debug: "Secret hash matches."
+            message: "Transaction Broadcasted Successfully!",
+            txid: tx.txid,
+            explorerLink: `https://blockchair.com/bitcoin-cash/transaction/${tx.txid}`
         });
+        
     } catch (e) {
-        res.json({ success: false, error: e.message });
+        console.error(e);
+        res.json({ success: false, error: e.message || "Transaction Failed" });
     }
 });
 
