@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Web interface for BCH Quantum Vaults",
   "main": "server.js",
-  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
