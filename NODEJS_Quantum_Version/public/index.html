@@ -4,22 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BCH Quantum Vault</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: #eee; display: flex; justify-content: center; min-height: 100vh; margin: 0; }
-        .container { width: 90%; max-width: 500px; margin-top: 50px; }
-        .card { background: #2d2d2d; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 20px; }
-        h1 { color: #0ac18e; text-align: center; }
-        h2 { border-bottom: 1px solid #444; padding-bottom: 10px; font-size: 1.2em; }
-        button { background: #0ac18e; color: #000; border: none; padding: 10px 20px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; margin-top: 10px; transition: 0.2s; }
-        button:hover { background: #08a67a; }
-        input { width: 100%; padding: 10px; background: #3d3d3d; border: 1px solid #555; color: white; border-radius: 4px; box-sizing: border-box; margin-top: 5px; }
-        .field { margin-bottom: 15px; }
-        label { font-size: 0.9em; color: #aaa; }
-        .secret { color: #ff5555; font-family: monospace; word-break: break-all; }
-        .addr { color: #4da6ff; font-family: monospace; word-break: break-all; }
-        #result { display: none; background: #222; padding: 15px; border-radius: 6px; border: 1px solid #444; }
-        .copy-btn { background: #444; font-size: 0.8em; padding: 4px 8px; width: auto; margin-top: 5px; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -62,58 +47,7 @@
     </div>
 </div>
 
-<script>
-    async function createVault() {
-        const res = await fetch('/api/create');
-        const data = await res.json();
-        
-        if(data.success) {
-            document.getElementById('result').style.display = 'block';
-            document.getElementById('vaultAddr').innerText = data.address;
-            document.getElementById('vaultSecret').innerText = data.secret;
-        }
-    }
-
-    async function checkBalance() {
-        const secret = document.getElementById('sweepSecret').value;
-        if(!secret) return alert("Enter secret first to derive address");
-        
-        // In a real app, we'd derive the address from the secret client-side or ask the server
-        // For now, we assume the user knows the address or we call a helper
-        // Let's cheat and ask the server to check the balance of the derived address
-        alert("Balance check requires server-side derivation (Implemented in full version)");
-    }
-
-    async function sweepVault() {
-        const secret = document.getElementById('sweepSecret').value;
-        const toAddress = document.getElementById('recipientAddr').value;
-        const status = document.getElementById('statusMsg');
-        
-        status.innerText = "Processing...";
-        status.style.color = "yellow";
-        
-        const res = await fetch('/api/sweep', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ secret, toAddress })
-        });
-        
-        const data = await res.json();
-        if(data.success) {
-            status.innerText = "Success: " + data.message;
-            status.style.color = "#0ac18e";
-        } else {
-            status.innerText = "Error: " + data.error;
-            status.style.color = "#ff5555";
-        }
-    }
-    
-    function copySecret() {
-        const text = document.getElementById('vaultSecret').innerText;
-        navigator.clipboard.writeText(text);
-        alert("Secret copied to clipboard!");
-    }
-</script>
+<script src="app.js"></script>
 
 </body>
 </html>
