@@ -81,13 +81,13 @@ async function createVault() {
     btn.disabled = false;
 }
 
-// 2. Check Balance (Simulation / Helper)
+// 2. Check Balance 
 async function checkBalance() {
     const secret = document.getElementById('sweepSecret').value.trim();
     if (!secret) return alert("Please enter the Vault Secret first.");
 
     const status = document.getElementById('statusMsg');
-    status.innerText = "Checking balance...";
+    status.innerText = "Checking balance on blockchain...";
     status.style.color = "yellow";
 
     if (secret.length !== 64) {
@@ -96,8 +96,20 @@ async function checkBalance() {
         return;
     }
 
-    status.innerText = "Secret format valid. Ready to sweep (Balance check mocked).";
-    status.style.color = "#0ac18e";
+    // Call the API with the secret
+    const data = await apiRequest('/api/balance', 'POST', { secret });
+
+    if (data.success) {
+        const bch = data.balance / 100000000;
+        status.innerHTML = `
+            <strong>Balance Found:</strong> ${data.balance} sats (${bch} BCH)<br>
+            <span style="font-size:0.8em; color:#aaa;">Vault Addr: ${data.address}</span>
+        `;
+        status.style.color = "#0ac18e";
+    } else {
+        status.innerText = "Error: " + data.error;
+        status.style.color = "#ff5555";
+    }
 }
 
 // 3. Sweep Vault
