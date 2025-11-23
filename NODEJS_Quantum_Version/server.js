@@ -3,7 +3,9 @@ const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const path = require('path');
 
+// --- GLOBALS ---
 let Wallet;
+let Contract; // Defined globally so we can access it in routes
 
 const app = express();
 const port = 3000;
@@ -16,11 +18,12 @@ async function startServer() {
     try {
         const mainnet = await import('mainnet-js');
         Wallet = mainnet.Wallet;
+        Contract = mainnet.Contract; // Initialize Contract here
         
         app.listen(port, '0.0.0.0', () => {
             console.log(`BCH Quantum Wallet running!`);
             console.log(`Local:   http://localhost:${port}`);
-            console.log(`Network: http://192.168.1.15:${port}`);
+            console.log(`Network: http://10.0.0.17:${port}`);
         });
     } catch (e) {
         console.error("Failed to load mainnet-js:", e);
@@ -112,28 +115,35 @@ function convertBits(data, fromBits, toBits, pad) {
     return ret;
 }
 
+// --- FIX: Use BigInt for Checksum Calculation ---
 function calculateChecksum(prefix, payload) {
     function polyMod(data) {
-        let c = 1;
+        // We must use BigInt because the coefficients exceed 32 bits
+        let c = 1n; 
         for (let d of data) {
-            let c0 = c >>> 35;
-            c = ((c & 0x07ffffffff) << 5) ^ d;
-            if (c0 & 0x01) c ^= 0x98f2bc8e61;
-            if (c0 & 0x02) c ^= 0x79b76d99e2;
-            if (c0 & 0x04) c ^= 0xf33e5fb3c4;
-            if (c0 & 0x08) c ^= 0xae2eabe2a8;
-            if (c0 & 0x10) c ^= 0x1e4f43e470;
+            let c0 = c >> 35n;
+            c = ((c & 0x07ffffffffn) << 5n) ^ BigInt(d);
+            
+            if (c0 & 0x01n) c ^= 0x98f2bc8e61n;
+            if (c0 & 0x02n) c ^= 0x79b76d99e2n;
+            if (c0 & 0x04n) c ^= 0xf33e5fb3c4n;
+            if (c0 & 0x08n) c ^= 0xae2eabe2a8n;
+            if (c0 & 0x10n) c ^= 0x1e4f43e470n;
         }
-        return c ^ 1;
+        return c ^ 1n;
     }
+
     const prefixData = [];
     for (let i = 0; i < prefix.length; i++) prefixData.push(prefix.charCodeAt(i) & 0x1f);
     prefixData.push(0);
+    
     const checksumData = prefixData.concat(payload).concat([0, 0, 0, 0, 0, 0, 0, 0]);
     const polymod = polyMod(checksumData);
+    
     const ret = [];
     for (let i = 0; i < 8; i++) {
-        ret.push((polymod >>> (5 * (7 - i))) & 0x1f);
+        // Convert BigInt back to Number for the result array
+        ret.push(Number((polymod >> (5n * BigInt(7 - i))) & 0x1fn));
     }
     return ret;
 }
@@ -154,15 +164,15 @@ async function createQuantumVault() {
     const h160 = crypto.createHash('ripemd160').update(s256).digest();
     
     // GENERATE ALL ADDRESS FORMATS
-    const cashAddrP2SH = toCashAddress(h160, 'p2sh', true); // bitcoincash:p...
-    const cashAddrP2PKH = toCashAddress(h160, 'p2pkh', true); // bitcoincash:q... (What you asked for)
+    const cashAddrP2SH = toCashAddress(h160, 'p2sh', true);
+    const cashAddrP2PKH = toCashAddress(h160, 'p2pkh', true); 
     const legacyAddr = toLegacyP2SH(h160);
 
     return {
         secret: secret.toString('hex'),
         secretHash: secretHash.toString('hex'),
         address: cashAddrP2SH,
-        addressP2PKH: cashAddrP2PKH, // Added this field
+        addressP2PKH: cashAddrP2PKH, 
         legacyAddress: legacyAddr,
         lockingScript: scriptBuffer.toString('hex')
     };
@@ -180,12 +190,31 @@ app.get('/api/create', async (req, res) => {
     }
 });
 
+// Updated Balance Check (supports secret-only lookup)
 app.post('/api/balance', async (req, res) => {
-    const { address } = req.body;
+    let { address, secret } = req.body;
+    
     try {
+        // If user provided Secret but no Address, derive the address first
+        if (!address && secret) {
+            const secretBuf = Buffer.from(secret, 'hex');
+            const secretHash = crypto.createHash('sha256').update(secretBuf).digest();
+            const scriptBuffer = Buffer.concat([Buffer.from('a820', 'hex'), secretHash, Buffer.from('87', 'hex')]);
+            const s256 = crypto.createHash('sha256').update(scriptBuffer).digest();
+            const h160 = crypto.createHash('ripemd160').update(s256).digest();
+            address = toCashAddress(h160, 'p2sh', true);
+        }
+
+        if (!address) throw new Error("Missing Address or Secret");
+
         const wallet = await Wallet.watchOnly(address);
         const balance = await wallet.getBalance('sat');
-        res.json({ success: true, balance: balance });
+        
+        res.json({ 
+            success: true, 
+            balance: balance,
+            address: address
+        });
     } catch (e) {
         res.json({ success: false, error: e.message });
     }
@@ -197,12 +226,9 @@ app.post('/api/sweep', async (req, res) => {
     try {
         if (!Contract) throw new Error("mainnet-js Contract module not loaded");
 
-        // 1. Re-derive the Vault details
         const secretBuf = Buffer.from(secret, 'hex');
         const secretHash = crypto.createHash('sha256').update(secretBuf).digest('hex');
         
-        // 2. Define the Hash Lock Contract (CashScript)
-        // This allows mainnet-js to handle the spending logic for us!
         const scriptText = `
             contract QuantumVault(bytes32 hash) {
                 function spend(bytes secret) {
@@ -211,29 +237,18 @@ app.post('/api/sweep', async (req, res) => {
             }
         `;
         
-        // 3. Instantiate the Contract Wallet
-        // We pass the specific hash for this vault as a constructor argument
         const contract = new Contract(scriptText, [secretHash], 'mainnet');
-        
-        // Verify the address matches what we generated manually
         console.log(`Sweeping from Contract Address: ${contract.address}`);
         
-        // 4. Check Balance
         const balance = await contract.getBalance('sat');
         console.log(`Vault Balance: ${balance} sats`);
         
-        if (balance < 2000) { // Minimum reasonable amount to sweep
+        if (balance < 2000) { 
             return res.json({ success: false, error: `Insufficient funds (${balance} sats). Send more BCH to test.` });
         }
         
-        // 5. Execute the Spend (Broadcasting Real Transaction)
-        // We call the 'spend' function defined in the contract
-        // Arguments: [secretHex]
-        // to: recipient address
-        // amount: balance - fee (sendMax)
-        
         const tx = await contract.functions.spend(secret)
-            .to(toAddress, balance - 1000) // Deduct ~1000 sats for fee/dust safety
+            .to(toAddress, balance - 1000) 
             .send();
 
         res.json({ 
