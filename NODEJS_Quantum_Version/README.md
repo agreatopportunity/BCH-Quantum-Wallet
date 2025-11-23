@@ -100,7 +100,7 @@ Expected output:
 ```
 BCH Quantum Wallet running!
 Local:   http://localhost:3000
-Network: http://10.0.0.17:3000
+Network: http://192.168.1.15:3000
 ```
 
 Use the **Network IP** to access the wallet from other devices on your LAN.
@@ -192,9 +192,6 @@ Your server listens on **0.0.0.0**, meaning:
 
 ## 🛠 **Troubleshooting**
 
-### **❌ Refused to apply style.css**
-
-Rename `styles.css` → `style.css`.
 
 ### **❌ mainnet-js: Wallet.fromP2SH is not a function**
 
