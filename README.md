@@ -1,8 +1,8 @@
-# BCH Quantum Vault (Level 2)
+# BCH Quantum Vault
 
 ## Merkle Signature Scheme Implementation
 
-This project implements a **Level 2 Post-Quantum Vault** on the Bitcoin Cash (BCH) network. It uses a **Merkle Signature Scheme (MSS)** to provide quantum-resistant security for your funds.
+This project implements a **Post-Quantum Vault** on the Bitcoin Cash (BCH) network. It uses a **Merkle Signature Scheme (MSS)** to provide quantum-resistant security for your funds.
 
 Unlike traditional ECDSA keys (which are vulnerable to Shor's Algorithm on a quantum computer), this vault relies solely on SHA256 hash functions, which are considered quantum-safe.
 
@@ -14,10 +14,8 @@ Instead of a single private key, this vault uses a **Tree of Keys**.
 2. **The Tree**: We hash these secrets together in pairs until we get a single top hash.
 3. **The Root (Public Key)**: The single top hash is your Quantum Address.
 
-### Why is this better than Level 1?
-
-* **Level 1 (Hash Lock)**: One secret = One address. Once you spend, the address is burned.
-* **Level 2 (Merkle Tree)**: One Root = Multiple Secrets. You can reveal one secret to spend, while keeping the others safe. This allows you to "reuse" the vault address (the Root) multiple times.
+### Process
+* **(Merkle Tree)**: One Root = Multiple Secrets. You can reveal one secret to spend, while keeping the others safe. This allows you to "reuse" the vault address (the Root) multiple times.
 
 ## 🚀 How to Use
 
