@@ -27,26 +27,60 @@ async function startServer() {
     }
 }
 
+// --- LEGACY P2SH UTILS (Base58Check) ---
+
+function toLegacyP2SH(hash160Buffer) {
+    // Network Version Byte for Mainnet P2SH is 0x05
+    const version = Buffer.from([0x05]);
+    const payload = Buffer.concat([version, hash160Buffer]);
+    
+    // Checksum: SHA256(SHA256(payload))
+    const sha1 = crypto.createHash('sha256').update(payload).digest();
+    const sha2 = crypto.createHash('sha256').update(sha1).digest();
+    const checksum = sha2.slice(0, 4);
+    
+    // Final binary: Version + Hash + Checksum
+    const binary = Buffer.concat([payload, checksum]);
+    
+    // Base58 Encode
+    return base58Encode(binary);
+}
+
+function base58Encode(buffer) {
+    const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    let carry, digits = [0];
+    for (let i = 0; i < buffer.length; i++) {
+        carry = buffer[i];
+        for (let j = 0; j < digits.length; j++) {
+            carry += digits[j] << 8;
+            digits[j] = carry % 58;
+            carry = (carry / 58) | 0;
+        }
+        while (carry > 0) {
+            digits.push(carry % 58);
+            carry = (carry / 58) | 0;
+        }
+    }
+    let string = '';
+    for (let k = 0; buffer[k] === 0 && k < buffer.length - 1; k++) {
+        string += ALPHABET[0];
+    }
+    for (let q = digits.length - 1; q >= 0; q--) {
+        string += ALPHABET[digits[q]];
+    }
+    return string;
+}
+
 // --- CASHADDR UTILS (Manual Implementation) ---
-// This allows us to generate valid addresses even if the heavy library has issues.
 
 function toCashAddress(hash160Buffer, type = 'p2sh') {
     const prefix = 'bitcoincash';
-    const typeByte = (type === 'p2sh') ? 0x08 : 0x00; // 0x00 for P2PKH, 0x08 for P2SH
-    
-    // Prepare payload: [typeByte] + [hash160]
+    const typeByte = (type === 'p2sh') ? 0x08 : 0x00;
     const payload = Buffer.concat([Buffer.from([typeByte]), hash160Buffer]);
-    
-    // Convert 8-bit buffer to 5-bit array (CashAddr uses Base32)
     const payload5Bit = convertBits(payload, 8, 5, true);
-    
-    // Calculate Checksum
     const checksum = calculateChecksum(prefix, payload5Bit);
-    
-    // Combine Payload + Checksum
     const combined = payload5Bit.concat(checksum);
     
-    // Encode to Base32 String
     const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
     let addr = prefix + ':';
     for (let val of combined) {
@@ -78,7 +112,6 @@ function convertBits(data, fromBits, toBits, pad) {
 }
 
 function calculateChecksum(prefix, payload) {
-    // PolyMod calculation for CashAddr
     function polyMod(data) {
         let c = 1;
         for (let d of data) {
@@ -92,15 +125,11 @@ function calculateChecksum(prefix, payload) {
         }
         return c ^ 1;
     }
-
-    // Expand prefix
     const prefixData = [];
     for (let i = 0; i < prefix.length; i++) prefixData.push(prefix.charCodeAt(i) & 0x1f);
     prefixData.push(0);
-
     const checksumData = prefixData.concat(payload).concat([0, 0, 0, 0, 0, 0, 0, 0]);
     const polymod = polyMod(checksumData);
-    
     const ret = [];
     for (let i = 0; i < 8; i++) {
         ret.push((polymod >>> (5 * (7 - i))) & 0x1f);
@@ -112,28 +141,26 @@ function calculateChecksum(prefix, payload) {
 
 async function createQuantumVault() {
     const secret = crypto.randomBytes(32);
-    
-    // 1. Hash Secret (SHA256)
     const secretHash = crypto.createHash('sha256').update(secret).digest();
     
-    // 2. Create Script: OP_SHA256 (0xa8) <32-bytes> <Hash> OP_EQUAL (0x87)
     const scriptBuffer = Buffer.concat([
         Buffer.from('a820', 'hex'),
         secretHash,
         Buffer.from('87', 'hex')
     ]);
     
-    // 3. Hash the Script: SHA256 -> RIPEMD160 (P2SH standard)
     const s256 = crypto.createHash('sha256').update(scriptBuffer).digest();
     const h160 = crypto.createHash('ripemd160').update(s256).digest();
     
-    // 4. Generate Real CashAddr (P2SH)
-    const address = toCashAddress(h160, 'p2sh'); // Will generate bitcoincash:p...
+    // GENERATE BOTH ADDRESS FORMATS
+    const cashAddr = toCashAddress(h160, 'p2sh');
+    const legacyAddr = toLegacyP2SH(h160);
 
     return {
         secret: secret.toString('hex'),
         secretHash: secretHash.toString('hex'),
-        address: address,
+        address: cashAddr,        // Standard modern format
+        legacyAddress: legacyAddr, // Old format (starts with 3)
         lockingScript: scriptBuffer.toString('hex')
     };
 }
@@ -164,7 +191,6 @@ app.post('/api/balance', async (req, res) => {
 app.post('/api/sweep', async (req, res) => {
     const { secret, toAddress } = req.body;
     try {
-        // Re-derive for validation
         const secretBuf = Buffer.from(secret, 'hex');
         const secretHash = crypto.createHash('sha256').update(secretBuf).digest();
         const scriptBuffer = Buffer.concat([Buffer.from('a820', 'hex'), secretHash, Buffer.from('87', 'hex')]);
@@ -173,7 +199,6 @@ app.post('/api/sweep', async (req, res) => {
         const h160 = crypto.createHash('ripemd160').update(s256).digest();
         const address = toCashAddress(h160, 'p2sh');
 
-        // Mock broadcast success
         res.json({ 
             success: true, 
             message: `Vault ${address.slice(0,15)}... Validated!`,
