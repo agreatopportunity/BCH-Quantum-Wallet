@@ -20,7 +20,7 @@ async function startServer() {
         app.listen(port, '0.0.0.0', () => {
             console.log(`BCH Quantum Wallet running!`);
             console.log(`Local:   http://localhost:${port}`);
-            console.log(`Network: http://10.0.0.17:${port}`);
+            console.log(`Network: http://192.168.1.15:${port}`);
         });
     } catch (e) {
         console.error("Failed to load mainnet-js:", e);
